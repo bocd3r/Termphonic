@@ -52,7 +52,26 @@ sudo pacman -S rust curl ffmpeg unzip
 
 ## Installation
 
-Clone the repository and run the installer:
+### Portable Release
+
+Download and extract the release archive, then run:
+
+```bash
+./termphonic
+```
+
+The portable archive contains Termphonic, `yt-dlp` and Deno. Only FFmpeg is
+required from the operating system.
+
+To install the portable archive under `~/.local`:
+
+```bash
+./install.sh
+```
+
+### From Source
+
+Clone the repository and run:
 
 ```bash
 git clone <repository-url> termphonic
@@ -60,13 +79,16 @@ cd termphonic
 ./install.sh
 ```
 
-The installer:
+In source mode, the installer:
 
 1. Checks required system dependencies.
 2. Builds the optimized Rust binary.
 3. Installs it at `~/.local/bin/termphonic`.
 4. Downloads the official standalone `yt-dlp` executable.
 5. Installs `yt-dlp` and Deno under `~/.local/lib/termphonic/libexec`.
+
+When run from a portable release, the same installer uses the bundled
+executables and does not require Cargo, curl, unzip or network access.
 
 Run the application with:
 
