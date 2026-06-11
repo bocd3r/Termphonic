@@ -52,6 +52,23 @@ sudo pacman -S rust curl ffmpeg unzip
 
 ## Installation
 
+### One-Line Install
+
+Install the latest Linux release directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bocd3r/Termphonic/main/scripts/install.sh | bash
+```
+
+To install a specific release tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bocd3r/Termphonic/main/scripts/install.sh | bash -s v0.1.0
+```
+
+The script downloads the release binary, verifies the checksum, and
+installs it to `~/.local/bin/termphonic`.
+
 ### Portable Release
 
 Download the single release binary, make it executable if needed, then run:
