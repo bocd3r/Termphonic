@@ -8,8 +8,6 @@
   A responsive terminal music player for searching and streaming audio from YouTube.
 </p>
 
-See the [changelog](CHANGELOG.md) for release notes.
-
 ## Features
 
 - Search YouTube without leaving the terminal.
