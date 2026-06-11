@@ -1,4 +1,4 @@
-use crate::models::{AppState, PlaybackState, SavedSession};
+use crate::domain::{AppState, PlaybackState, SavedSession};
 use std::path::PathBuf;
 
 fn session_path() -> Option<PathBuf> {

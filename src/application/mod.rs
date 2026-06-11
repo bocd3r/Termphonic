@@ -1,12 +1,14 @@
-use crate::actions::{
+pub mod actions;
+
+use crate::application::actions::{
     adjust_volume, play_next, seek_relative, start_song_at_queue_index,
     start_song_at_queue_index_from, stop_player, toggle_pause,
 };
-use crate::audio::AudioPlayer;
-use crate::models::{AppState, Focus, LoopMode, PlaybackState, PlayerEvent, Theme};
-use crate::search::search_youtube;
-use crate::session::{load_session, save_session};
-use crate::ui::draw_ui;
+use crate::domain::{AppState, Focus, LoopMode, PlaybackState, PlayerEvent, Theme};
+use crate::infrastructure::audio::AudioPlayer;
+use crate::infrastructure::search::search_youtube;
+use crate::infrastructure::session::{load_session, save_session};
+use crate::presentation::draw_ui;
 use crossterm::ExecutableCommand;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{
@@ -115,7 +117,7 @@ pub(crate) async fn run() -> Result<(), Box<dyn Error>> {
                         if active.id == video_id
                             && matches!(state.playback_state, PlaybackState::Loading)
                         {
-                            state.playing_song = Some(crate::models::PlayingSong {
+                            state.playing_song = Some(crate::domain::PlayingSong {
                                 id: video_id,
                                 title,
                                 duration,

@@ -1,5 +1,5 @@
-use crate::models::{SEARCH_PAGE_SIZE, YtSearchResult};
-use crate::runtime::{find_javascript_runtime, get_yt_dlp_path};
+use crate::domain::{PlayerEvent, SEARCH_PAGE_SIZE, YtSearchResult};
+use crate::infrastructure::runtime::{find_javascript_runtime, get_yt_dlp_path};
 use std::process::Command;
 
 pub(crate) fn summarize_yt_dlp_error(stderr: &str) -> String {
@@ -53,7 +53,7 @@ pub(crate) fn spawn_stream_url_fetch(
     duration: u64,
     start_seconds: u64,
     start_paused: bool,
-    tx_event: tokio::sync::mpsc::UnboundedSender<crate::models::PlayerEvent>,
+    tx_event: tokio::sync::mpsc::UnboundedSender<PlayerEvent>,
 ) {
     let yt_dlp_bin = get_yt_dlp_path();
     let javascript_runtime = find_javascript_runtime();
@@ -72,7 +72,7 @@ pub(crate) fn spawn_stream_url_fetch(
         match yt_output {
             Ok(output) if output.status.success() => {
                 let stream_url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let _ = tx_event.send(crate::models::PlayerEvent::UrlFetched {
+                let _ = tx_event.send(PlayerEvent::UrlFetched {
                     video_id,
                     stream_url,
                     title,
@@ -84,11 +84,10 @@ pub(crate) fn spawn_stream_url_fetch(
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let error = summarize_yt_dlp_error(&stderr);
-                let _ =
-                    tx_event.send(crate::models::PlayerEvent::UrlFetchFailed { video_id, error });
+                let _ = tx_event.send(PlayerEvent::UrlFetchFailed { video_id, error });
             }
             Err(e) => {
-                let _ = tx_event.send(crate::models::PlayerEvent::UrlFetchFailed {
+                let _ = tx_event.send(PlayerEvent::UrlFetchFailed {
                     video_id,
                     error: e.to_string(),
                 });

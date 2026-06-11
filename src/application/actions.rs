@@ -1,7 +1,7 @@
-use crate::audio::AudioPlayer;
-use crate::models::{AppState, LoopMode, PlaybackState, PlayerEvent, YtSearchResult};
-use crate::runtime::get_yt_dlp_path;
-use crate::search::{spawn_stream_url_fetch, summarize_yt_dlp_error};
+use crate::domain::{AppState, LoopMode, PlaybackState, PlayerEvent, YtSearchResult};
+use crate::infrastructure::audio::AudioPlayer;
+use crate::infrastructure::runtime::get_yt_dlp_path;
+use crate::infrastructure::search::{spawn_stream_url_fetch, summarize_yt_dlp_error};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -69,7 +69,7 @@ pub(crate) fn start_song_at_queue_index_from(
     let song = state.queue[idx].clone();
     state.current_queue_index = Some(idx);
     state.playback_state = PlaybackState::Loading;
-    state.playing_song = Some(crate::models::PlayingSong {
+    state.playing_song = Some(crate::domain::PlayingSong {
         id: song.id.clone(),
         title: song.title.clone(),
         duration: song.duration.unwrap_or(0.0) as u64,

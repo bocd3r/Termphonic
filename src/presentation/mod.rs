@@ -1,4 +1,4 @@
-use crate::models::{AppState, Focus, LoopMode, PlaybackState, SEARCH_PAGE_SIZE, theme_palette};
+use crate::domain::{AppState, Focus, LoopMode, PlaybackState, SEARCH_PAGE_SIZE, theme_palette};
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

@@ -340,8 +340,8 @@ mod tests {
 
     #[test]
     fn resolves_search_page_size_constant() {
-        assert_eq!(crate::models::SEARCH_PAGE_SIZE, 20);
-        let _ = crate::models::YtSearchResult {
+        assert_eq!(crate::domain::SEARCH_PAGE_SIZE, 20);
+        let _ = crate::domain::YtSearchResult {
             id: "id".to_string(),
             title: "title".to_string(),
             duration: None,

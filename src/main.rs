@@ -1,13 +1,9 @@
-mod actions;
-mod app;
-mod audio;
-mod models;
-mod runtime;
-mod search;
-mod session;
-mod ui;
+mod application;
+mod domain;
+mod infrastructure;
+mod presentation;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    app::run().await
+    application::run().await
 }
