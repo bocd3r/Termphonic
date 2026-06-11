@@ -62,6 +62,7 @@ install -m 755 "$ROOT_DIR/install.sh" "$PACKAGE_DIR/install.sh"
 install -m 755 "$TEMP_DIR/yt-dlp" "$PACKAGE_DIR/libexec/yt-dlp"
 install -m 755 "$TEMP_DIR/deno/deno" "$PACKAGE_DIR/libexec/deno"
 install -m 644 "$ROOT_DIR/README.md" "$PACKAGE_DIR/README.md"
+install -m 644 "$ROOT_DIR/LICENSE" "$PACKAGE_DIR/LICENSE"
 install -m 644 "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$PACKAGE_DIR/THIRD_PARTY_NOTICES.md"
 install -m 644 \
     "$ROOT_DIR/assets/termphonic-icon-256.png" \

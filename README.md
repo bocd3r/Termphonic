@@ -210,4 +210,4 @@ Logo and icon files are stored in [`assets/`](assets/).
 
 ## License
 
-No license has been specified yet.
+Termphonic is distributed under the [MIT License](LICENSE).
