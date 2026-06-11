@@ -59,6 +59,7 @@ mkdir -p "$PACKAGE_DIR/libexec" "$PACKAGE_DIR/assets" "$PACKAGE_DIR/licenses"
 
 install -m 755 "$ROOT_DIR/target/release/termphonic" "$PACKAGE_DIR/termphonic"
 install -m 755 "$ROOT_DIR/install.sh" "$PACKAGE_DIR/install.sh"
+install -m 755 "$ROOT_DIR/uninstall.sh" "$PACKAGE_DIR/uninstall.sh"
 install -m 755 "$TEMP_DIR/yt-dlp" "$PACKAGE_DIR/libexec/yt-dlp"
 install -m 755 "$TEMP_DIR/deno/deno" "$PACKAGE_DIR/libexec/deno"
 install -m 644 "$ROOT_DIR/README.md" "$PACKAGE_DIR/README.md"

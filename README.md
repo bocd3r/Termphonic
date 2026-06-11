@@ -69,6 +69,12 @@ To install the portable archive under `~/.local`:
 ./install.sh
 ```
 
+To remove a local installation:
+
+```bash
+./uninstall.sh
+```
+
 ### From Source
 
 Clone the repository and run:
