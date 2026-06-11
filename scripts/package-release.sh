@@ -22,7 +22,7 @@ case "$(uname -m)" in
         ;;
 esac
 
-for dependency in cargo curl tar unzip sha256sum; do
+for dependency in cargo curl tar unzip sha256sum python3; do
     if ! command -v "$dependency" > /dev/null 2>&1; then
         echo "Missing packaging dependency: $dependency" >&2
         exit 1
@@ -30,11 +30,12 @@ for dependency in cargo curl tar unzip sha256sum; do
 done
 
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -1)"
-PACKAGE_NAME="termphonic-${VERSION}-linux-${ARCH}"
-PACKAGE_DIR="$DIST_DIR/$PACKAGE_NAME"
-ARCHIVE_PATH="$DIST_DIR/$PACKAGE_NAME.tar.gz"
+BINARY_PATH="$DIST_DIR/termphonic"
+CHECKSUM_PATH="$DIST_DIR/termphonic.sha256"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
+
+mkdir -p "$DIST_DIR"
 
 echo "Building Termphonic $VERSION for linux-$ARCH..."
 cargo build --release --locked --manifest-path "$ROOT_DIR/Cargo.toml"
@@ -54,34 +55,47 @@ curl --fail --location --silent --show-error \
     --output "$TEMP_DIR/deno-LICENSE.md"
 unzip -oq "$TEMP_DIR/deno.zip" -d "$TEMP_DIR/deno"
 
-rm -rf "$PACKAGE_DIR"
-mkdir -p "$PACKAGE_DIR/libexec" "$PACKAGE_DIR/assets" "$PACKAGE_DIR/licenses"
-
-install -m 755 "$ROOT_DIR/target/release/termphonic" "$PACKAGE_DIR/termphonic"
-install -m 755 "$ROOT_DIR/install.sh" "$PACKAGE_DIR/install.sh"
-install -m 755 "$ROOT_DIR/uninstall.sh" "$PACKAGE_DIR/uninstall.sh"
-install -m 755 "$TEMP_DIR/yt-dlp" "$PACKAGE_DIR/libexec/yt-dlp"
-install -m 755 "$TEMP_DIR/deno/deno" "$PACKAGE_DIR/libexec/deno"
-install -m 644 "$ROOT_DIR/README.md" "$PACKAGE_DIR/README.md"
-install -m 644 "$ROOT_DIR/LICENSE" "$PACKAGE_DIR/LICENSE"
-install -m 644 "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$PACKAGE_DIR/THIRD_PARTY_NOTICES.md"
-install -m 644 \
-    "$ROOT_DIR/assets/termphonic-icon-256.png" \
-    "$PACKAGE_DIR/assets/termphonic-icon-256.png"
+PAYLOAD_DIR="$TEMP_DIR/payload"
+mkdir -p "$PAYLOAD_DIR/libexec" "$PAYLOAD_DIR/licenses"
+install -m 755 "$TEMP_DIR/yt-dlp" "$PAYLOAD_DIR/libexec/yt-dlp"
+install -m 755 "$TEMP_DIR/deno/deno" "$PAYLOAD_DIR/libexec/deno"
+install -m 644 "$ROOT_DIR/LICENSE" "$PAYLOAD_DIR/LICENSE"
+install -m 644 "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$PAYLOAD_DIR/THIRD_PARTY_NOTICES.md"
 install -m 644 \
     "$TEMP_DIR/yt-dlp-THIRD_PARTY_LICENSES.txt" \
-    "$PACKAGE_DIR/licenses/yt-dlp-THIRD_PARTY_LICENSES.txt"
+    "$PAYLOAD_DIR/licenses/yt-dlp-THIRD_PARTY_LICENSES.txt"
 install -m 644 \
     "$TEMP_DIR/deno-LICENSE.md" \
-    "$PACKAGE_DIR/licenses/deno-LICENSE.md"
+    "$PAYLOAD_DIR/licenses/deno-LICENSE.md"
 
-tar -C "$DIST_DIR" -czf "$ARCHIVE_PATH" "$PACKAGE_NAME"
+PAYLOAD_ARCHIVE="$TEMP_DIR/termphonic-payload.tar.gz"
+tar -C "$PAYLOAD_DIR" -czf "$PAYLOAD_ARCHIVE" .
+PAYLOAD_SIZE="$(stat -c '%s' "$PAYLOAD_ARCHIVE")"
+PAYLOAD_SHA256="$(sha256sum "$PAYLOAD_ARCHIVE" | awk '{print $1}')"
+
+rm -f "$BINARY_PATH" "$CHECKSUM_PATH"
+install -m 755 "$ROOT_DIR/target/release/termphonic" "$BINARY_PATH"
+cat "$PAYLOAD_ARCHIVE" >> "$BINARY_PATH"
+python3 - "$BINARY_PATH" "$PAYLOAD_SIZE" "$PAYLOAD_SHA256" <<'PY'
+import struct
+import sys
+
+binary_path = sys.argv[1]
+payload_size = int(sys.argv[2])
+payload_sha256 = bytes.fromhex(sys.argv[3])
+magic = b"TPKGv1\0\0"
+footer = magic + struct.pack("<Q", payload_size) + payload_sha256
+
+with open(binary_path, "ab") as handle:
+    handle.write(footer)
+PY
+
 (
     cd "$DIST_DIR"
-    sha256sum "$(basename "$ARCHIVE_PATH")" > "$(basename "$ARCHIVE_PATH").sha256"
+    sha256sum "$(basename "$BINARY_PATH")" > "$(basename "$CHECKSUM_PATH")"
 )
 
 echo
 echo "Created:"
-echo "  $ARCHIVE_PATH"
-echo "  $ARCHIVE_PATH.sha256"
+echo "  $BINARY_PATH"
+echo "  $CHECKSUM_PATH"

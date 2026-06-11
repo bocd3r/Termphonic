@@ -1,27 +1,31 @@
-use std::io::Read;
-use std::path::PathBuf;
+use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{
+    Arc, OnceLock,
     atomic::{AtomicBool, AtomicU32, Ordering},
-    Arc,
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crossterm::ExecutableCommand;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use crossterm::ExecutableCommand;
 
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph};
 
 use rodio::{OutputStream, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use unicode_width::UnicodeWidthChar;
 
 const SEARCH_PAGE_SIZE: usize = 20;
+const EMBEDDED_RUNTIME_MAGIC: [u8; 8] = *b"TPKGv1\0\0";
+const EMBEDDED_RUNTIME_FOOTER_LEN: usize = 8 + 8 + 32;
+static EMBEDDED_RUNTIME_ROOT: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 // =========================================================================
 // 1. Audio Streaming backend
@@ -361,9 +365,196 @@ enum PlayerEvent {
 // 3. Search & Stream URL Helpers
 // =========================================================================
 
+#[derive(Debug)]
+struct EmbeddedRuntimePackage {
+    payload: Vec<u8>,
+}
+
+#[derive(Debug)]
+struct EmbeddedRuntimeFooter {
+    payload_len: usize,
+    digest: [u8; 32],
+}
+
+fn embedded_runtime_root() -> Option<PathBuf> {
+    EMBEDDED_RUNTIME_ROOT
+        .get_or_init(|| resolve_embedded_runtime_root().ok().flatten())
+        .clone()
+}
+
+fn resolve_embedded_runtime_root() -> std::io::Result<Option<PathBuf>> {
+    let Some(footer) = read_embedded_runtime_footer()? else {
+        return Ok(None);
+    };
+
+    let Some(base_dir) = runtime_cache_base() else {
+        return Ok(None);
+    };
+
+    let runtime_root = base_dir.join(hex_digest(&footer.digest));
+    if runtime_is_ready(&runtime_root) {
+        return Ok(Some(runtime_root));
+    }
+
+    let package = read_embedded_runtime_package(&footer)?;
+    extract_embedded_runtime(&package, &runtime_root)?;
+    Ok(Some(runtime_root))
+}
+
+fn runtime_cache_base() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| {
+        PathBuf::from(home)
+            .join(".local/share/termphonic")
+            .join("runtime")
+    })
+}
+
+fn runtime_is_ready(root: &Path) -> bool {
+    root.join("libexec/yt-dlp").is_file() && root.join("libexec/deno").is_file()
+}
+
+fn read_embedded_runtime_footer() -> std::io::Result<Option<EmbeddedRuntimeFooter>> {
+    let executable = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(_) => return Ok(None),
+    };
+
+    let mut file = match std::fs::File::open(&executable) {
+        Ok(file) => file,
+        Err(_) => return Ok(None),
+    };
+
+    let file_size = file.metadata()?.len() as usize;
+    if file_size < EMBEDDED_RUNTIME_FOOTER_LEN {
+        return Ok(None);
+    }
+
+    file.seek(SeekFrom::End(-(EMBEDDED_RUNTIME_FOOTER_LEN as i64)))?;
+    let mut footer = [0u8; EMBEDDED_RUNTIME_FOOTER_LEN];
+    file.read_exact(&mut footer)?;
+
+    if footer[..8] != EMBEDDED_RUNTIME_MAGIC {
+        return Ok(None);
+    }
+
+    let payload_len = u64::from_le_bytes(footer[8..16].try_into().unwrap()) as usize;
+    if payload_len > file_size.saturating_sub(EMBEDDED_RUNTIME_FOOTER_LEN) {
+        return Ok(None);
+    }
+
+    let digest = footer[16..48].try_into().unwrap();
+    Ok(Some(EmbeddedRuntimeFooter {
+        payload_len,
+        digest,
+    }))
+}
+
+fn read_embedded_runtime_package(
+    footer: &EmbeddedRuntimeFooter,
+) -> std::io::Result<EmbeddedRuntimePackage> {
+    let executable = std::env::current_exe()?;
+    let mut file = std::fs::File::open(&executable)?;
+    let file_size = file.metadata()?.len() as usize;
+    let payload_len = footer.payload_len;
+    if payload_len > file_size.saturating_sub(EMBEDDED_RUNTIME_FOOTER_LEN) {
+        return Err(std::io::Error::other(
+            "embedded runtime payload is truncated",
+        ));
+    }
+
+    let payload_offset = (file_size - EMBEDDED_RUNTIME_FOOTER_LEN - payload_len) as u64;
+    file.seek(SeekFrom::Start(payload_offset))?;
+    let mut payload = vec![0u8; payload_len];
+    file.read_exact(&mut payload)?;
+
+    let digest = Sha256::digest(&payload);
+    let digest_bytes: [u8; 32] = digest.into();
+    if digest_bytes != footer.digest {
+        return Err(std::io::Error::other(
+            "embedded runtime payload hash mismatch",
+        ));
+    }
+
+    Ok(EmbeddedRuntimePackage { payload })
+}
+
+fn extract_embedded_runtime(
+    package: &EmbeddedRuntimePackage,
+    runtime_root: &Path,
+) -> std::io::Result<()> {
+    if runtime_is_ready(runtime_root) {
+        return Ok(());
+    }
+
+    let Some(parent) = runtime_root.parent() else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(parent)?;
+
+    let temp_dir = parent.join(format!(
+        ".{}.tmp-{}-{}",
+        runtime_root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("runtime"),
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    if temp_dir.exists() {
+        std::fs::remove_dir_all(&temp_dir)?;
+    }
+    std::fs::create_dir_all(&temp_dir)?;
+
+    let cursor = Cursor::new(package.payload.as_slice());
+    let decoder = flate2::read::GzDecoder::new(cursor);
+    let mut archive = tar::Archive::new(decoder);
+    archive.unpack(&temp_dir)?;
+
+    if !runtime_is_ready(&temp_dir) {
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        return Err(std::io::Error::other(
+            "embedded runtime payload is incomplete",
+        ));
+    }
+
+    match std::fs::rename(&temp_dir, runtime_root) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            if runtime_is_ready(runtime_root) {
+                let _ = std::fs::remove_dir_all(&temp_dir);
+                Ok(())
+            } else {
+                let _ = std::fs::remove_dir_all(runtime_root);
+                std::fs::rename(&temp_dir, runtime_root).or_else(|rename_error| {
+                    let _ = std::fs::remove_dir_all(&temp_dir);
+                    Err(rename_error)
+                })
+            }
+        }
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&temp_dir);
+            Err(error)
+        }
+    }
+}
+
+fn hex_digest(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 fn get_yt_dlp_path() -> PathBuf {
     if let Some(path) = std::env::var_os("TERMPHONIC_YT_DLP") {
         let path = PathBuf::from(path);
+        if path.is_file() {
+            return path;
+        }
+    }
+
+    if let Some(runtime_root) = embedded_runtime_root() {
+        let path = runtime_root.join("libexec/yt-dlp");
         if path.is_file() {
             return path;
         }
@@ -396,6 +587,13 @@ fn get_yt_dlp_path() -> PathBuf {
 fn find_javascript_runtime() -> Option<(String, String)> {
     if let Some(path) = std::env::var_os("TERMPHONIC_DENO") {
         let path = PathBuf::from(path);
+        if path.is_file() {
+            return Some(("deno".to_string(), path.to_string_lossy().into_owned()));
+        }
+    }
+
+    if let Some(runtime_root) = embedded_runtime_root() {
+        let path = runtime_root.join("libexec/deno");
         if path.is_file() {
             return Some(("deno".to_string(), path.to_string_lossy().into_owned()));
         }
@@ -454,10 +652,7 @@ fn summarize_yt_dlp_error(stderr: &str) -> String {
         .to_string()
 }
 
-async fn search_youtube(
-    query: &str,
-    page: usize,
-) -> Result<(Vec<YtSearchResult>, bool), String> {
+async fn search_youtube(query: &str, page: usize) -> Result<(Vec<YtSearchResult>, bool), String> {
     let first_item = page * SEARCH_PAGE_SIZE + 1;
     let last_item = first_item + SEARCH_PAGE_SIZE;
     let output = Command::new(get_yt_dlp_path())
@@ -659,7 +854,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     start_paused,
                 } => {
                     if let Some(ref active) = state.playing_song {
-                        if active.id == video_id && matches!(state.playback_state, PlaybackState::Loading) {
+                        if active.id == video_id
+                            && matches!(state.playback_state, PlaybackState::Loading)
+                        {
                             state.playing_song = Some(PlayingSong {
                                 id: video_id,
                                 title,
@@ -821,8 +1018,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     state.queue.push(song.clone());
                                     let queue_idx = state.queue.len() - 1;
                                     state.selected_queue = Some(queue_idx);
-                                    
-                                    start_song_at_queue_index(&mut state, queue_idx, &mut audio_player, tx_event.clone());
+
+                                    start_song_at_queue_index(
+                                        &mut state,
+                                        queue_idx,
+                                        &mut audio_player,
+                                        tx_event.clone(),
+                                    );
                                 }
                             }
                             KeyCode::Tab => {
@@ -881,7 +1083,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             KeyCode::Enter => {
                                 if let Some(sel) = state.selected_queue {
-                                    start_song_at_queue_index(&mut state, sel, &mut audio_player, tx_event.clone());
+                                    start_song_at_queue_index(
+                                        &mut state,
+                                        sel,
+                                        &mut audio_player,
+                                        tx_event.clone(),
+                                    );
                                 }
                             }
                             KeyCode::Tab => {
@@ -890,7 +1097,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Char('d') | KeyCode::Delete => {
                                 if let Some(sel) = state.selected_queue {
                                     state.queue.remove(sel);
-                                    
+
                                     // Adjust current playing index if needed
                                     if let Some(curr) = state.current_queue_index {
                                         if curr == sel {
@@ -1009,7 +1216,7 @@ fn start_song_at_queue_index_from(
     if idx >= state.queue.len() {
         return;
     }
-    
+
     let song = state.queue[idx].clone();
     state.current_queue_index = Some(idx);
     state.playback_state = PlaybackState::Loading;
@@ -1035,7 +1242,7 @@ fn start_song_at_queue_index_from(
     // Fetch stream url
     let video_id = song.id.clone();
     let title = song.title.clone();
-    
+
     let yt_dlp_bin = get_yt_dlp_path();
     let javascript_runtime = find_javascript_runtime();
     tokio::spawn(async move {
@@ -1218,7 +1425,6 @@ fn play_next(
     }
 }
 
-
 // =========================================================================
 // 6. UI Drawing
 // =========================================================================
@@ -1333,9 +1539,10 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
             .block(results_block);
         frame.render_widget(loading, search_chunks[1]);
     } else if state.search_results.is_empty() {
-        let empty = Paragraph::new("\n\nNo results. Press / and type a query above, then press Enter.")
-            .alignment(Alignment::Center)
-            .block(results_block);
+        let empty =
+            Paragraph::new("\n\nNo results. Press / and type a query above, then press Enter.")
+                .alignment(Alignment::Center)
+                .block(results_block);
         frame.render_widget(empty, search_chunks[1]);
     } else {
         let results_inner = results_block.inner(search_chunks[1]);
@@ -1359,18 +1566,12 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         let mut header_spans = vec![
             Span::styled("  ", header_style),
             Span::styled("#   ", header_style),
-            Span::styled(
-                pad_display_width("Title", title_width),
-                header_style,
-            ),
+            Span::styled(pad_display_width("Title", title_width), header_style),
         ];
         if show_channel {
             header_spans.extend([
                 Span::styled("  ", header_style),
-                Span::styled(
-                    pad_display_width("Channel", channel_width),
-                    header_style,
-                ),
+                Span::styled(pad_display_width("Channel", channel_width), header_style),
             ]);
         }
         header_spans.extend([
@@ -1426,10 +1627,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                 let mut spans = vec![
                     Span::styled(marker, marker_style),
                     Span::styled(
-                        format!(
-                            "{:02}. ",
-                            state.search_page * SEARCH_PAGE_SIZE + idx + 1
-                        ),
+                        format!("{:02}. ", state.search_page * SEARCH_PAGE_SIZE + idx + 1),
                         if is_selected {
                             row_style
                         } else {
@@ -1504,7 +1702,10 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                     .unwrap_or_default()
                     .as_millis()
                     / 200;
-                format!("Preparing audio {}", SPINNER[frame as usize % SPINNER.len()])
+                format!(
+                    "Preparing audio {}",
+                    SPINNER[frame as usize % SPINNER.len()]
+                )
             }
             PlaybackState::Playing => "Playing 🔊".to_string(),
             PlaybackState::Paused => "Paused ⏸".to_string(),
@@ -1527,7 +1728,12 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         };
 
         let mut status_line = vec![
-            Span::styled("Status: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Status: ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 status_str,
                 Style::default().fg(if matches!(state.playback_state, PlaybackState::Loading) {
@@ -1551,7 +1757,12 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
 
         let info = vec![
             Line::from(vec![
-                Span::styled("Title:  ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Title:  ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(
                     truncate_str(&song.title, title_width.max(4)),
                     Style::default().fg(Color::White),
@@ -1559,11 +1770,21 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
             ]),
             Line::from(status_line),
             Line::from(vec![
-                Span::styled("Volume: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Volume: ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(vol_str),
             ]),
             Line::from(vec![
-                Span::styled("Repeat: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Repeat: ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(repeat_str, Style::default().fg(Color::Yellow)),
             ]),
         ];
@@ -1659,8 +1880,16 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                     Span::styled(prefix, active_style),
                     Span::styled(format!("{:02}. ", idx + 1), row_style),
                     Span::styled(
-                        format!("{:<width$}", truncate_str(&res.title, title_width), width = title_width),
-                        if is_currently_playing { active_style } else { row_style },
+                        format!(
+                            "{:<width$}",
+                            truncate_str(&res.title, title_width),
+                            width = title_width
+                        ),
+                        if is_currently_playing {
+                            active_style
+                        } else {
+                            row_style
+                        },
                     ),
                     Span::styled("  ", row_style),
                     Span::styled(duration, row_style.fg(Color::Yellow)),
@@ -1678,8 +1907,8 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         Line::from(" / Search   ↑/↓ Select   PgUp/PgDn Pages   Enter Play   Tab Focus"),
         Line::from(" Space Play/Pause   ←/→ Seek   +/- Volume   s Stop   r Repeat   q Quit"),
     ])
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::Gray).bg(Color::Black));
+    .alignment(Alignment::Center)
+    .style(Style::default().fg(Color::Gray).bg(Color::Black));
     frame.render_widget(footer, chunks[2]);
 }
 
@@ -1713,7 +1942,10 @@ fn pad_display_width(value: &str, width: usize) -> String {
         .chars()
         .map(|character| character.width().unwrap_or(0))
         .sum::<usize>();
-    format!("{truncated}{}", " ".repeat(width.saturating_sub(display_width)))
+    format!(
+        "{truncated}{}",
+        " ".repeat(width.saturating_sub(display_width))
+    )
 }
 
 fn truncate_display_width(value: &str, max_width: usize) -> String {
@@ -1750,9 +1982,8 @@ fn cava_visualizer(elapsed: Duration, level: f64, width: usize) -> Line<'static>
     let spans = (0..width)
         .map(|index| {
             let x = index as f64;
-            let movement = ((phase + x * 0.83).sin().abs()
-                + ((phase * 0.61) - x * 0.47).sin().abs())
-                / 2.0;
+            let movement =
+                ((phase + x * 0.83).sin().abs() + ((phase * 0.61) - x * 0.47).sin().abs()) / 2.0;
             let height = (movement * strength * (BARS.len() - 1) as f64).round() as usize;
             let mix = if width > 1 {
                 index as f64 / (width - 1) as f64
@@ -1787,6 +2018,20 @@ fn truncate_str(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use std::fs;
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "{prefix}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ))
+    }
 
     #[test]
     fn formats_durations_with_hours() {
@@ -1851,5 +2096,39 @@ mod tests {
         assert_eq!(restored.elapsed_seconds, 75);
         assert_eq!(restored.loop_mode, LoopMode::Shuffle);
         assert_eq!(restored.queue[0].id, "video-id");
+    }
+
+    #[test]
+    fn extracts_embedded_runtime_payload() {
+        let payload_root = unique_temp_dir("termphonic-payload");
+        let extract_root = unique_temp_dir("termphonic-runtime");
+        let _ = fs::remove_dir_all(&payload_root);
+        let _ = fs::remove_dir_all(&extract_root);
+
+        fs::create_dir_all(payload_root.join("libexec")).unwrap();
+        fs::write(payload_root.join("libexec/yt-dlp"), b"yt-dlp").unwrap();
+        fs::write(payload_root.join("libexec/deno"), b"deno").unwrap();
+
+        let archive = {
+            let encoder = GzEncoder::new(Vec::new(), Compression::default());
+            let mut builder = tar::Builder::new(encoder);
+            builder
+                .append_path_with_name(payload_root.join("libexec/yt-dlp"), "libexec/yt-dlp")
+                .unwrap();
+            builder
+                .append_path_with_name(payload_root.join("libexec/deno"), "libexec/deno")
+                .unwrap();
+            let encoder = builder.into_inner().unwrap();
+            encoder.finish().unwrap()
+        };
+
+        let package = EmbeddedRuntimePackage { payload: archive };
+
+        extract_embedded_runtime(&package, &extract_root).unwrap();
+        assert!(extract_root.join("libexec/yt-dlp").is_file());
+        assert!(extract_root.join("libexec/deno").is_file());
+
+        let _ = fs::remove_dir_all(&payload_root);
+        let _ = fs::remove_dir_all(&extract_root);
     }
 }

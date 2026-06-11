@@ -8,7 +8,6 @@ BIN_DIR="$HOME/.local/bin"
 DATA_DIR="$HOME/.local/share/$APP_NAME"
 LIBEXEC_DIR="$HOME/.local/lib/$APP_NAME/libexec"
 BUNDLE_BIN="$SCRIPT_DIR/termphonic"
-BUNDLE_LIBEXEC="$SCRIPT_DIR/libexec"
 
 run_step() {
     local label="$1"
@@ -39,15 +38,19 @@ require_commands() {
     done
 }
 
-install_files() {
+install_binary() {
     local binary="$1"
-    local yt_dlp="$2"
-    local deno="$3"
-
-    mkdir -p "$BIN_DIR" "$DATA_DIR" "$LIBEXEC_DIR"
+    mkdir -p "$BIN_DIR" "$DATA_DIR"
     pkill -x termphonic 2>/dev/null || true
     pkill -x bmusic 2>/dev/null || true
     run_step "Installing Termphonic" install -m 755 "$binary" "$BIN_DIR/$APP_NAME"
+}
+
+install_runtimes() {
+    local yt_dlp="$1"
+    local deno="$2"
+
+    mkdir -p "$BIN_DIR" "$DATA_DIR" "$LIBEXEC_DIR"
     run_step "Installing media runtimes" \
         install -m 755 "$yt_dlp" "$deno" "$LIBEXEC_DIR"
 }
@@ -56,14 +59,9 @@ echo
 echo "Termphonic installer"
 echo
 
-if [ -x "$BUNDLE_BIN" ] \
-    && [ -x "$BUNDLE_LIBEXEC/yt-dlp" ] \
-    && [ -x "$BUNDLE_LIBEXEC/deno" ]; then
+if [ -x "$BUNDLE_BIN" ]; then
     require_commands ffmpeg
-    install_files \
-        "$BUNDLE_BIN" \
-        "$BUNDLE_LIBEXEC/yt-dlp" \
-        "$BUNDLE_LIBEXEC/deno"
+    install_binary "$BUNDLE_BIN"
 else
     require_commands cargo curl ffmpeg unzip
     run_step "Building release binary" \
@@ -99,10 +97,8 @@ else
     run_step "Extracting Deno runtime" \
         unzip -oq "$TEMP_DIR/deno.zip" -d "$TEMP_DIR/deno"
 
-    install_files \
-        "$SCRIPT_DIR/target/release/$APP_NAME" \
-        "$TEMP_DIR/yt-dlp" \
-        "$TEMP_DIR/deno/deno"
+    install_binary "$SCRIPT_DIR/target/release/$APP_NAME"
+    install_runtimes "$TEMP_DIR/yt-dlp" "$TEMP_DIR/deno/deno"
 fi
 
 echo

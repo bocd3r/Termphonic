@@ -54,16 +54,17 @@ sudo pacman -S rust curl ffmpeg unzip
 
 ### Portable Release
 
-Download and extract the release archive, then run:
+Download the single release binary, make it executable if needed, then run:
 
 ```bash
 ./termphonic
 ```
 
-The portable archive contains Termphonic, `yt-dlp` and Deno. Only FFmpeg is
-required from the operating system.
+The binary contains the media runtimes internally. On first launch it extracts
+`yt-dlp` and Deno into `~/.local/share/termphonic/runtime/` and reuses them on
+subsequent runs. Only FFmpeg is required from the operating system.
 
-To install the portable archive under `~/.local`:
+To install the portable binary under `~/.local`:
 
 ```bash
 ./install.sh
@@ -123,18 +124,11 @@ cargo run
 ./scripts/package-release.sh
 ```
 
-The generated archive and checksum are written to `dist/`. The archive
-contains:
+The generated binary and checksum are written to `dist/`. The release asset is
+just a single executable:
 
 ```text
 termphonic
-install.sh
-libexec/yt-dlp
-libexec/deno
-assets/termphonic-icon-256.png
-README.md
-THIRD_PARTY_NOTICES.md
-licenses/
 ```
 
 Tagged commits matching `v*` are packaged automatically by GitHub Actions and
@@ -162,8 +156,8 @@ uploaded to the corresponding GitHub release.
 
 Termphonic uses:
 
-- The standalone `yt-dlp` executable to search YouTube and resolve stream URLs.
-- A private Deno runtime to solve current YouTube player challenges.
+- A standalone `yt-dlp` runtime embedded in the release binary to search YouTube and resolve stream URLs.
+- A private Deno runtime embedded in the release binary to solve current YouTube player challenges.
 - FFmpeg to decode remote media into stereo PCM audio.
 - Rodio for audio output.
 - Ratatui and Crossterm for the terminal interface.
@@ -181,18 +175,13 @@ stream URL and resumes from the saved position.
 ./install.sh
 ```
 
-This refreshes the private `yt-dlp` and Deno executables without requiring
-system-wide runtime installation.
+This refreshes the local installation. The release binary manages its own
+embedded runtimes automatically.
 
 ### Requested format is not available
 
-Update the installed `yt-dlp` environment:
-
-```bash
-./install.sh
-```
-
-Termphonic prefers audio-only streams and falls back to combined HLS streams when necessary.
+Termphonic prefers audio-only streams and falls back to combined HLS streams
+when necessary.
 
 ### No audio output
 
