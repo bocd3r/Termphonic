@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Termphonic - Music in Your Terminal</title>
+    <meta
+      name="description"
+      content="Termphonic is a fast terminal music player for YouTube with a single-file Linux release, queue, shuffle, session restore and CAVA-style visualization."
+    >
+    <meta property="og:title" content="Termphonic">
+    <meta
+      property="og:description"
+      content="A terminal music player with a single-file Linux release, queue, shuffle, session restore and a responsive TUI."
+    >
+    <meta property="og:image" content="assets/termphonic-logo.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="assets/termphonic-icon-64.png">
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header class="shell">
+      <nav class="topbar">
+        <a class="brand" href="#top" aria-label="Termphonic home">
+          <img src="assets/termphonic-icon-64.png" alt="" width="40" height="40">
+          <span>Termphonic</span>
+        </a>
+        <div class="toplinks">
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+          <a href="https://github.com/bocd3r/Termphonic" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Terminal music player for YouTube</p>
+          <h1>One binary. Full terminal playback.</h1>
+          <p class="lede">
+            Termphonic is a focused TUI music player for Linux. It searches YouTube,
+            manages a queue, restores playback state, and ships as a single executable
+            with embedded runtimes.
+          </p>
+
+          <div class="actions" id="download">
+            <a class="button primary" href="https://github.com/bocd3r/Termphonic/releases/latest">Download latest release</a>
+            <a class="button secondary" href="https://github.com/bocd3r/Termphonic">View source</a>
+          </div>
+
+          <div class="meta-grid">
+            <div>
+              <span class="meta-label">Release model</span>
+              <strong>Single file</strong>
+            </div>
+            <div>
+              <span class="meta-label">Runtime</span>
+              <strong>Embedded yt-dlp + Deno</strong>
+            </div>
+            <div>
+              <span class="meta-label">Platform</span>
+              <strong>Linux</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-art">
+          <img src="assets/termphonic-logo.png" alt="Termphonic logo" class="logo-art">
+        </div>
+      </section>
+
+      <section class="shell section" id="features">
+        <div class="section-head">
+          <p class="eyebrow">What it does</p>
+          <h2>Built for keyboard-first playback</h2>
+        </div>
+
+        <div class="cards">
+          <article class="card">
+            <h3>Search and queue</h3>
+            <p>Search YouTube, browse paginated results, and queue tracks without leaving the terminal.</p>
+          </article>
+          <article class="card">
+            <h3>Playback controls</h3>
+            <p>Play, pause, stop, seek, change volume, and switch between off, shuffle, and single repeat modes.</p>
+          </article>
+          <article class="card">
+            <h3>Session restore</h3>
+            <p>Resume active playback after reopening the app, including queue, position, and volume.</p>
+          </article>
+          <article class="card">
+            <h3>Responsive TUI</h3>
+            <p>Compact layouts, readable duration labels, queue highlighting, and a CAVA-style visualizer.</p>
+          </article>
+          <article class="card">
+            <h3>Single-file release</h3>
+            <p>No Python, no Node, no install-time runtime setup. The binary extracts what it needs on first launch.</p>
+          </article>
+          <article class="card">
+            <h3>Portable source install</h3>
+            <p>From source, the installer still works locally and installs to `~/.local` with the same app name.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="shell section split">
+        <div>
+          <p class="eyebrow">Install</p>
+          <h2>Simple install path</h2>
+          <pre><code>curl -L -o termphonic \
+  https://github.com/bocd3r/Termphonic/releases/latest/download/termphonic
+chmod +x termphonic
+./termphonic</code></pre>
+          <p class="note">
+            The release binary carries `yt-dlp` and Deno inside itself and extracts them into the user cache automatically.
+          </p>
+        </div>
+
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span></span><span></span><span></span>
+          </div>
+          <pre><code>$ termphonic
+Search / queue / play
+Shuffle, session restore, and single-file release
+</code></pre>
+        </div>
+      </section>
+
+      <section class="shell section">
+        <div class="section-head">
+          <p class="eyebrow">Project</p>
+          <h2>Source, license, and releases</h2>
+        </div>
+
+        <div class="links-grid">
+          <a class="link-card" href="https://github.com/bocd3r/Termphonic" target="_blank" rel="noreferrer">
+            <strong>Source code</strong>
+            <span>Browse the repository and contribute.</span>
+          </a>
+          <a class="link-card" href="https://github.com/bocd3r/Termphonic/releases" target="_blank" rel="noreferrer">
+            <strong>Releases</strong>
+            <span>Download the latest single-file build.</span>
+          </a>
+          <a class="link-card" href="LICENSE">
+            <strong>MIT License</strong>
+            <span>Open-source license for the project.</span>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell footer">
+      <p>Termphonic - Music in Your Terminal</p>
+      <p>Built for terminal users who want a smaller, simpler release format.</p>
+    </footer>
+  </body>
+</html>
