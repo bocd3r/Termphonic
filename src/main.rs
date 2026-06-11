@@ -302,6 +302,106 @@ enum LoopMode {
     Single,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Serialize)]
+enum Theme {
+    Default,
+    Midnight,
+    HighContrast,
+    TerminalGreen,
+}
+
+impl Theme {
+    fn next(self) -> Self {
+        match self {
+            Theme::Default => Theme::Midnight,
+            Theme::Midnight => Theme::HighContrast,
+            Theme::HighContrast => Theme::TerminalGreen,
+            Theme::TerminalGreen => Theme::Default,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Theme::Default => "Default",
+            Theme::Midnight => "Midnight",
+            Theme::HighContrast => "High Contrast",
+            Theme::TerminalGreen => "Terminal Green",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ThemePalette {
+    accent: Color,
+    border: Color,
+    selection_bg: Color,
+    selection_fg: Color,
+    text: Color,
+    dim: Color,
+    warning: Color,
+    good: Color,
+    header: Color,
+    highlight: Color,
+    background: Color,
+}
+
+fn theme_palette(theme: Theme) -> ThemePalette {
+    match theme {
+        Theme::Default => ThemePalette {
+            accent: Color::Cyan,
+            border: Color::Magenta,
+            selection_bg: Color::Rgb(0, 70, 75),
+            selection_fg: Color::White,
+            text: Color::White,
+            dim: Color::DarkGray,
+            warning: Color::Yellow,
+            good: Color::LightMagenta,
+            header: Color::Magenta,
+            highlight: Color::LightMagenta,
+            background: Color::Black,
+        },
+        Theme::Midnight => ThemePalette {
+            accent: Color::Rgb(125, 218, 214),
+            border: Color::Rgb(219, 134, 200),
+            selection_bg: Color::Rgb(24, 39, 54),
+            selection_fg: Color::White,
+            text: Color::Rgb(231, 237, 242),
+            dim: Color::Rgb(130, 144, 156),
+            warning: Color::Rgb(235, 205, 97),
+            good: Color::Rgb(181, 136, 255),
+            header: Color::Rgb(219, 134, 200),
+            highlight: Color::Rgb(146, 119, 255),
+            background: Color::Rgb(8, 12, 20),
+        },
+        Theme::HighContrast => ThemePalette {
+            accent: Color::White,
+            border: Color::White,
+            selection_bg: Color::White,
+            selection_fg: Color::Black,
+            text: Color::White,
+            dim: Color::Gray,
+            warning: Color::Yellow,
+            good: Color::Cyan,
+            header: Color::White,
+            highlight: Color::Yellow,
+            background: Color::Black,
+        },
+        Theme::TerminalGreen => ThemePalette {
+            accent: Color::Rgb(90, 255, 138),
+            border: Color::Rgb(90, 255, 138),
+            selection_bg: Color::Rgb(12, 46, 23),
+            selection_fg: Color::Rgb(225, 255, 229),
+            text: Color::Rgb(214, 255, 219),
+            dim: Color::Rgb(123, 171, 128),
+            warning: Color::Rgb(228, 208, 122),
+            good: Color::Rgb(90, 255, 138),
+            header: Color::Rgb(90, 255, 138),
+            highlight: Color::Rgb(160, 255, 186),
+            background: Color::Black,
+        },
+    }
+}
+
 struct AppState {
     search_query: String,
     search_results: Vec<YtSearchResult>,
@@ -320,6 +420,7 @@ struct AppState {
     playback_level: f64,
     volume: f32,
     loop_mode: LoopMode,
+    theme: Theme,
     playback_error: Option<String>,
 }
 
@@ -330,6 +431,7 @@ struct SavedSession {
     elapsed_seconds: u64,
     volume: f32,
     loop_mode: LoopMode,
+    theme: Theme,
     was_paused: bool,
 }
 
@@ -737,6 +839,7 @@ fn save_session(state: &AppState) -> std::io::Result<()> {
             elapsed_seconds: state.elapsed.as_secs(),
             volume: state.volume,
             loop_mode: state.loop_mode,
+            theme: state.theme,
             was_paused: matches!(state.playback_state, PlaybackState::Paused),
         };
         let contents = serde_json::to_vec_pretty(&session)?;
@@ -784,6 +887,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         playback_level: 0.0,
         volume: 0.5,
         loop_mode: LoopMode::Off,
+        theme: Theme::Default,
         playback_error: None,
     };
     let restored_session = load_session();
@@ -793,6 +897,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         state.selected_queue = Some(session.current_queue_index);
         state.volume = session.volume.clamp(0.0, 1.0);
         state.loop_mode = session.loop_mode;
+        state.theme = session.theme;
         state.focus = Focus::Queue;
     }
     audio_player.sink.set_volume(state.volume);
@@ -985,6 +1090,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     LoopMode::Single => LoopMode::Off,
                                 };
                             }
+                            KeyCode::Char('t') => {
+                                state.theme = state.theme.next();
+                            }
+                            KeyCode::Char('T') => {
+                                state.theme = Theme::Default;
+                            }
                             KeyCode::Up => {
                                 if let Some(sel) = state.selected_result {
                                     if sel > 0 {
@@ -1066,6 +1177,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     LoopMode::Shuffle => LoopMode::Single,
                                     LoopMode::Single => LoopMode::Off,
                                 };
+                            }
+                            KeyCode::Char('t') => {
+                                state.theme = state.theme.next();
+                            }
+                            KeyCode::Char('T') => {
+                                state.theme = Theme::Default;
                             }
                             KeyCode::Up => {
                                 if let Some(sel) = state.selected_queue {
@@ -1430,6 +1547,7 @@ fn play_next(
 // =========================================================================
 
 fn draw_ui(frame: &mut Frame, state: &AppState) {
+    let palette = theme_palette(state.theme);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -1446,7 +1564,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Magenta)),
+                .border_style(Style::default().fg(palette.border)),
         );
     frame.render_widget(header, chunks[0]);
 
@@ -1470,9 +1588,9 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
 
     // Draw Input box
     let input_border_color = if matches!(state.focus, Focus::SearchInput) {
-        Color::Cyan
+        palette.accent
     } else {
-        Color::Gray
+        palette.dim
     };
     let input_title = if matches!(state.focus, Focus::SearchInput) {
         " Search (Typing...) "
@@ -1490,9 +1608,9 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
 
     // Draw Results List
     let results_border_color = if matches!(state.focus, Focus::SearchResults) {
-        Color::Cyan
+        palette.accent
     } else {
-        Color::Gray
+        palette.dim
     };
     let visible_result_rows = search_chunks[1].height.saturating_sub(3).max(1) as usize;
     let selected_result = state.selected_result.unwrap_or(0);
@@ -1560,7 +1678,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         let channel_width = 14;
         let duration_width = 8;
         let header_style = Style::default()
-            .fg(Color::DarkGray)
+            .fg(palette.dim)
             .add_modifier(Modifier::BOLD);
 
         let mut header_spans = vec![
@@ -1599,11 +1717,11 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                     .is_some_and(|song| song.id == res.id);
                 let row_style = if is_selected {
                     Style::default()
-                        .fg(Color::White)
-                        .bg(Color::Rgb(0, 70, 75))
+                        .fg(palette.selection_fg)
+                        .bg(palette.selection_bg)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(palette.text)
                 };
                 let marker = if is_active {
                     match state.playback_state {
@@ -1617,7 +1735,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                     "  "
                 };
                 let marker_style = if is_active {
-                    row_style.fg(Color::LightMagenta)
+                    row_style.fg(palette.good)
                 } else {
                     row_style
                 };
@@ -1631,7 +1749,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                         if is_selected {
                             row_style
                         } else {
-                            Style::default().fg(Color::DarkGray)
+                            Style::default().fg(palette.dim)
                         },
                     ),
                     Span::styled(
@@ -1651,7 +1769,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                             if is_selected {
                                 row_style
                             } else {
-                                Style::default().fg(Color::Gray)
+                                Style::default().fg(palette.dim)
                             },
                         ),
                     ]);
@@ -1663,7 +1781,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                         if is_selected {
                             row_style
                         } else {
-                            Style::default().fg(Color::Yellow)
+                            Style::default().fg(palette.warning)
                         },
                     ),
                 ]);
@@ -1689,7 +1807,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(" Now Playing ")
-        .border_style(Style::default().fg(Color::Magenta));
+        .border_style(Style::default().fg(palette.header));
 
     if let Some(ref song) = state.playing_song {
         let title_width = right_chunks[0].width.saturating_sub(10) as usize;
@@ -1731,15 +1849,15 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
             Span::styled(
                 "Status: ",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(palette.accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 status_str,
                 Style::default().fg(if matches!(state.playback_state, PlaybackState::Loading) {
-                    Color::Cyan
+                    palette.accent
                 } else {
-                    Color::Yellow
+                    palette.warning
                 }),
             ),
         ];
@@ -1749,7 +1867,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                 Span::styled(
                     timer_str,
                     Style::default()
-                        .fg(Color::White)
+                        .fg(palette.text)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]);
@@ -1760,12 +1878,12 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                 Span::styled(
                     "Title:  ",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(palette.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     truncate_str(&song.title, title_width.max(4)),
-                    Style::default().fg(Color::White),
+                    Style::default().fg(palette.text),
                 ),
             ]),
             Line::from(status_line),
@@ -1773,7 +1891,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                 Span::styled(
                     "Volume: ",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(palette.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(vol_str),
@@ -1782,10 +1900,19 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                 Span::styled(
                     "Repeat: ",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(palette.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(repeat_str, Style::default().fg(Color::Yellow)),
+                Span::styled(repeat_str, Style::default().fg(palette.warning)),
+            ]),
+            Line::from(vec![
+                Span::styled(
+                    "Theme:  ",
+                    Style::default()
+                        .fg(palette.accent)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(state.theme.name(), Style::default().fg(palette.highlight)),
             ]),
         ];
 
@@ -1820,9 +1947,9 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         let no_song = Paragraph::new(message)
             .alignment(Alignment::Center)
             .style(Style::default().fg(if state.playback_error.is_some() {
-                Color::LightRed
+                palette.warning
             } else {
-                Color::White
+                palette.text
             }))
             .block(player_block);
         frame.render_widget(no_song, right_chunks[0]);
@@ -1830,9 +1957,9 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
 
     // Draw Queue
     let queue_border_color = if matches!(state.focus, Focus::Queue) {
-        Color::Cyan
+        palette.accent
     } else {
-        Color::Gray
+        palette.dim
     };
     let queue_block = Block::default()
         .borders(Borders::ALL)
@@ -1858,17 +1985,17 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
 
                 let row_style = if is_selected {
                     Style::default()
-                        .fg(Color::White)
-                        .bg(Color::Rgb(0, 70, 75))
+                        .fg(palette.selection_fg)
+                        .bg(palette.selection_bg)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(palette.text)
                 };
                 let active_style = if is_selected {
-                    row_style.fg(Color::LightMagenta)
+                    row_style.fg(palette.good)
                 } else if is_currently_playing {
                     Style::default()
-                        .fg(Color::LightMagenta)
+                        .fg(palette.good)
                         .add_modifier(Modifier::BOLD)
                 } else {
                     row_style
@@ -1892,7 +2019,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
                         },
                     ),
                     Span::styled("  ", row_style),
-                    Span::styled(duration, row_style.fg(Color::Yellow)),
+                    Span::styled(duration, row_style.fg(palette.warning)),
                 ]);
                 ListItem::new(line)
             })
@@ -1908,7 +2035,7 @@ fn draw_ui(frame: &mut Frame, state: &AppState) {
         Line::from(" Space Play/Pause   ←/→ Seek   +/- Volume   s Stop   r Repeat   q Quit"),
     ])
     .alignment(Alignment::Center)
-    .style(Style::default().fg(Color::Gray).bg(Color::Black));
+    .style(Style::default().fg(palette.dim).bg(palette.background));
     frame.render_widget(footer, chunks[2]);
 }
 
@@ -2088,6 +2215,7 @@ mod tests {
             elapsed_seconds: 75,
             volume: 0.45,
             loop_mode: LoopMode::Shuffle,
+            theme: Theme::Midnight,
             was_paused: false,
         };
 

@@ -19,6 +19,7 @@
 - CAVA-style audio visualizer.
 - Automatic session restore with queue and playback position.
 - Compact duration labels for long videos and live streams.
+- Built-in theme switching with Default, Midnight, High Contrast and Terminal Green.
 - Standalone `yt-dlp` integration without Python or pip.
 - Bundled standalone Deno runtime for YouTube JavaScript challenges.
 
@@ -165,6 +166,8 @@ uploaded to the corresponding GitHub release.
 | `Left` / `Right` | Seek backward or forward 10 seconds |
 | `+` / `-` | Increase or decrease volume |
 | `r` | Cycle Off, Shuffle and Single repeat modes |
+| `t` | Cycle UI themes |
+| `T` | Reset theme to Default |
 | `s` | Stop playback |
 | `d` or `Delete` | Remove the selected queue item |
 | `q` | Quit |
