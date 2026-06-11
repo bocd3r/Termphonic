@@ -74,7 +74,7 @@ To install the portable archive under `~/.local`:
 Clone the repository and run:
 
 ```bash
-git clone <repository-url> termphonic
+git clone https://github.com/bocd3r/Termphonic.git termphonic
 cd termphonic
 ./install.sh
 ```
