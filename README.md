@@ -20,34 +20,34 @@
 - Automatic session restore with queue and playback position.
 - Compact duration labels for long videos and live streams.
 - Standalone `yt-dlp` integration without Python or pip.
-- JavaScript challenge support through Node.js, Deno, QuickJS or Bun.
+- Bundled standalone Deno runtime for YouTube JavaScript challenges.
 
 ## Requirements
 
 - Linux
 - Rust toolchain with Cargo
 - FFmpeg
-- Curl, for the source installer
-- A JavaScript runtime supported by `yt-dlp`
+- Curl and unzip, for the source installer
 
-Node.js is recommended. Deno, QuickJS and Bun are also detected automatically.
+The installer downloads standalone copies of both `yt-dlp` and Deno. No
+system-wide Python, Node.js or JavaScript runtime is required.
 
 ### Debian and Ubuntu
 
 ```bash
-sudo apt install cargo curl ffmpeg nodejs
+sudo apt install cargo curl ffmpeg unzip
 ```
 
 ### Fedora
 
 ```bash
-sudo dnf install cargo curl ffmpeg nodejs
+sudo dnf install cargo curl ffmpeg unzip
 ```
 
 ### Arch Linux
 
 ```bash
-sudo pacman -S rust curl ffmpeg nodejs
+sudo pacman -S rust curl ffmpeg unzip
 ```
 
 ## Installation
@@ -66,7 +66,7 @@ The installer:
 2. Builds the optimized Rust binary.
 3. Installs it at `~/.local/bin/termphonic`.
 4. Downloads the official standalone `yt-dlp` executable.
-5. Installs it under `~/.local/lib/termphonic/libexec`.
+5. Installs `yt-dlp` and Deno under `~/.local/lib/termphonic/libexec`.
 
 Run the application with:
 
@@ -112,7 +112,7 @@ cargo run
 Termphonic uses:
 
 - The standalone `yt-dlp` executable to search YouTube and resolve stream URLs.
-- A supported JavaScript runtime to solve current YouTube player challenges.
+- A private Deno runtime to solve current YouTube player challenges.
 - FFmpeg to decode remote media into stereo PCM audio.
 - Rodio for audio output.
 - Ratatui and Crossterm for the terminal interface.
@@ -124,19 +124,14 @@ stream URL and resumes from the saved position.
 
 ## Troubleshooting
 
-### No supported JavaScript runtime
-
-Install Node.js or another supported runtime:
-
-```bash
-node --version
-```
-
-Then rerun:
+### Missing or outdated runtime
 
 ```bash
 ./install.sh
 ```
+
+This refreshes the private `yt-dlp` and Deno executables without requiring
+system-wide runtime installation.
 
 ### Requested format is not available
 

@@ -394,6 +394,33 @@ fn get_yt_dlp_path() -> PathBuf {
 }
 
 fn find_javascript_runtime() -> Option<(String, String)> {
+    if let Some(path) = std::env::var_os("TERMPHONIC_DENO") {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Some(("deno".to_string(), path.to_string_lossy().into_owned()));
+        }
+    }
+
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            for path in [
+                directory.join("libexec/deno"),
+                directory.join("../lib/termphonic/libexec/deno"),
+            ] {
+                if path.is_file() {
+                    return Some(("deno".to_string(), path.to_string_lossy().into_owned()));
+                }
+            }
+        }
+    }
+
+    if let Some(home) = std::env::var_os("HOME") {
+        let path = PathBuf::from(home).join(".local/lib/termphonic/libexec/deno");
+        if path.is_file() {
+            return Some(("deno".to_string(), path.to_string_lossy().into_owned()));
+        }
+    }
+
     for (runtime, binaries) in [
         ("deno", &["deno"][..]),
         ("node", &["node", "nodejs"][..]),
@@ -1021,10 +1048,7 @@ fn start_song_at_queue_index_from(
                 .arg("--js-runtimes")
                 .arg(format!("{runtime}:{path}"));
         }
-        command
-            .arg("--remote-components")
-            .arg("ejs:github")
-            .arg(format!("https://www.youtube.com/watch?v={video_id}"));
+        command.arg(format!("https://www.youtube.com/watch?v={video_id}"));
 
         let yt_output = command.output();
 

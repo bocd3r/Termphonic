@@ -30,8 +30,8 @@ echo
 echo "Termphonic installer"
 echo
 
-printf "%-42s" "[1/4] Checking dependencies"
-for dependency in cargo curl ffmpeg; do
+printf "%-42s" "[1/5] Checking dependencies"
+for dependency in cargo curl ffmpeg unzip; do
     if ! command -v "$dependency" > /dev/null 2>&1; then
         echo "failed"
         echo "Missing required dependency: $dependency" >&2
@@ -40,20 +40,22 @@ for dependency in cargo curl ffmpeg; do
 done
 echo "done"
 
-run_step "[2/4] Building release binary" cargo build --release --quiet
+run_step "[2/5] Building release binary" cargo build --release --quiet
 
 mkdir -p "$BIN_DIR" "$DATA_DIR" "$LIBEXEC_DIR"
 pkill -x termphonic 2>/dev/null || true
 pkill -x bmusic 2>/dev/null || true
-run_step "[3/4] Installing executable" \
+run_step "[3/5] Installing executable" \
     install -m 755 "target/release/$APP_NAME" "$BIN_DIR/$APP_NAME"
 
 case "$(uname -m)" in
     x86_64)
         YT_DLP_ASSET="yt-dlp_linux"
+        DENO_TARGET="x86_64-unknown-linux-gnu"
         ;;
     aarch64 | arm64)
         YT_DLP_ASSET="yt-dlp_linux_aarch64"
+        DENO_TARGET="aarch64-unknown-linux-gnu"
         ;;
     *)
         echo "Unsupported architecture for bundled yt-dlp: $(uname -m)" >&2
@@ -61,12 +63,21 @@ case "$(uname -m)" in
         ;;
 esac
 
+TEMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+YT_DLP_TEMP="$TEMP_DIR/yt-dlp"
 YT_DLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/$YT_DLP_ASSET"
-YT_DLP_TEMP="$(mktemp)"
-trap 'rm -f "$YT_DLP_TEMP"' EXIT
-run_step "[4/4] Installing standalone yt-dlp" \
+run_step "[4/5] Installing standalone yt-dlp" \
     curl --fail --location --silent --show-error "$YT_DLP_URL" --output "$YT_DLP_TEMP"
 install -m 755 "$YT_DLP_TEMP" "$LIBEXEC_DIR/yt-dlp"
+
+DENO_URL="https://github.com/denoland/deno/releases/latest/download/deno-$DENO_TARGET.zip"
+run_step "[5/5] Downloading Deno runtime" \
+    curl --fail --location --silent --show-error "$DENO_URL" --output "$TEMP_DIR/deno.zip"
+run_step "      Installing Deno runtime" \
+    unzip -oq "$TEMP_DIR/deno.zip" -d "$TEMP_DIR/deno"
+install -m 755 "$TEMP_DIR/deno/deno" "$LIBEXEC_DIR/deno"
 
 echo
 echo "Installed successfully."
