@@ -361,53 +361,36 @@ enum PlayerEvent {
 // 3. Search & Stream URL Helpers
 // =========================================================================
 
-fn get_yt_dlp_path() -> String {
-    // 1. Check if yt-dlp is in PATH
-    if Command::new("yt-dlp")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-    {
-        return "yt-dlp".to_string();
+fn get_yt_dlp_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("TERMPHONIC_YT_DLP") {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return path;
+        }
     }
 
-    // 2. Check the current and legacy application data directories.
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            let portable_path = directory.join("libexec/yt-dlp");
+            if portable_path.is_file() {
+                return portable_path;
+            }
+
+            let installed_path = directory.join("../lib/termphonic/libexec/yt-dlp");
+            if installed_path.is_file() {
+                return installed_path;
+            }
+        }
+    }
+
     if let Some(home) = std::env::var_os("HOME") {
-        for app_dir in ["termphonic", "bmusic"] {
-            let path = std::path::Path::new(&home)
-                .join(".local/share")
-                .join(app_dir)
-                .join("venv/bin/yt-dlp");
-            if path.exists() {
-                return path.to_string_lossy().into_owned();
-            }
+        let user_path = PathBuf::from(home).join(".local/lib/termphonic/libexec/yt-dlp");
+        if user_path.is_file() {
+            return user_path;
         }
     }
 
-    // 3. Check executable dir /venv/bin/yt-dlp or .venv/bin/yt-dlp
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let p1 = exe_dir.join(".venv/bin/yt-dlp");
-            if p1.exists() {
-                return p1.to_string_lossy().into_owned();
-            }
-            let p2 = exe_dir.join("venv/bin/yt-dlp");
-            if p2.exists() {
-                return p2.to_string_lossy().into_owned();
-            }
-        }
-    }
-
-    // 4. Fallback to local .venv in current working directory
-    let local_path = std::path::Path::new(".venv/bin/yt-dlp");
-    if local_path.exists() {
-        return local_path.to_string_lossy().into_owned();
-    }
-
-    "yt-dlp".to_string()
+    PathBuf::from("yt-dlp")
 }
 
 fn find_javascript_runtime() -> Option<(String, String)> {

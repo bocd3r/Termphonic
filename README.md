@@ -19,14 +19,15 @@
 - CAVA-style audio visualizer.
 - Automatic session restore with queue and playback position.
 - Compact duration labels for long videos and live streams.
-- JavaScript challenge support through `yt-dlp` and Node.js, Deno, QuickJS or Bun.
+- Standalone `yt-dlp` integration without Python or pip.
+- JavaScript challenge support through Node.js, Deno, QuickJS or Bun.
 
 ## Requirements
 
 - Linux
 - Rust toolchain with Cargo
 - FFmpeg
-- Python 3 with `venv`
+- Curl, for the source installer
 - A JavaScript runtime supported by `yt-dlp`
 
 Node.js is recommended. Deno, QuickJS and Bun are also detected automatically.
@@ -34,19 +35,19 @@ Node.js is recommended. Deno, QuickJS and Bun are also detected automatically.
 ### Debian and Ubuntu
 
 ```bash
-sudo apt install cargo ffmpeg python3 python3-venv nodejs
+sudo apt install cargo curl ffmpeg nodejs
 ```
 
 ### Fedora
 
 ```bash
-sudo dnf install cargo ffmpeg python3 nodejs
+sudo dnf install cargo curl ffmpeg nodejs
 ```
 
 ### Arch Linux
 
 ```bash
-sudo pacman -S rust ffmpeg python nodejs
+sudo pacman -S rust curl ffmpeg nodejs
 ```
 
 ## Installation
@@ -64,8 +65,8 @@ The installer:
 1. Checks required system dependencies.
 2. Builds the optimized Rust binary.
 3. Installs it at `~/.local/bin/termphonic`.
-4. Creates an isolated Python environment under `~/.local/share/termphonic`.
-5. Installs `yt-dlp` with its default components.
+4. Downloads the official standalone `yt-dlp` executable.
+5. Installs it under `~/.local/lib/termphonic/libexec`.
 
 Run the application with:
 
@@ -110,7 +111,7 @@ cargo run
 
 Termphonic uses:
 
-- `yt-dlp` to search YouTube and resolve playable stream URLs.
+- The standalone `yt-dlp` executable to search YouTube and resolve stream URLs.
 - A supported JavaScript runtime to solve current YouTube player challenges.
 - FFmpeg to decode remote media into stereo PCM audio.
 - Rodio for audio output.

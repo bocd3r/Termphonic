@@ -5,7 +5,7 @@ set -euo pipefail
 APP_NAME="termphonic"
 BIN_DIR="$HOME/.local/bin"
 DATA_DIR="$HOME/.local/share/$APP_NAME"
-VENV_DIR="$DATA_DIR/venv"
+LIBEXEC_DIR="$HOME/.local/lib/$APP_NAME/libexec"
 
 run_step() {
     local label="$1"
@@ -31,7 +31,7 @@ echo "Termphonic installer"
 echo
 
 printf "%-42s" "[1/4] Checking dependencies"
-for dependency in cargo ffmpeg python3; do
+for dependency in cargo curl ffmpeg; do
     if ! command -v "$dependency" > /dev/null 2>&1; then
         echo "failed"
         echo "Missing required dependency: $dependency" >&2
@@ -42,20 +42,31 @@ echo "done"
 
 run_step "[2/4] Building release binary" cargo build --release --quiet
 
-mkdir -p "$BIN_DIR" "$DATA_DIR"
+mkdir -p "$BIN_DIR" "$DATA_DIR" "$LIBEXEC_DIR"
 pkill -x termphonic 2>/dev/null || true
 pkill -x bmusic 2>/dev/null || true
 run_step "[3/4] Installing executable" \
     install -m 755 "target/release/$APP_NAME" "$BIN_DIR/$APP_NAME"
 
-if [ ! -x "$VENV_DIR/bin/pip" ]; then
-    run_step "[4/4] Creating Python environment" python3 -m venv "$VENV_DIR"
-    run_step "      Installing yt-dlp" \
-        "$VENV_DIR/bin/pip" install --quiet --disable-pip-version-check "yt-dlp[default]"
-else
-    run_step "[4/4] Updating yt-dlp" \
-        "$VENV_DIR/bin/pip" install --quiet --disable-pip-version-check --upgrade "yt-dlp[default]"
-fi
+case "$(uname -m)" in
+    x86_64)
+        YT_DLP_ASSET="yt-dlp_linux"
+        ;;
+    aarch64 | arm64)
+        YT_DLP_ASSET="yt-dlp_linux_aarch64"
+        ;;
+    *)
+        echo "Unsupported architecture for bundled yt-dlp: $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+YT_DLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/$YT_DLP_ASSET"
+YT_DLP_TEMP="$(mktemp)"
+trap 'rm -f "$YT_DLP_TEMP"' EXIT
+run_step "[4/4] Installing standalone yt-dlp" \
+    curl --fail --location --silent --show-error "$YT_DLP_URL" --output "$YT_DLP_TEMP"
+install -m 755 "$YT_DLP_TEMP" "$LIBEXEC_DIR/yt-dlp"
 
 echo
 echo "Installed successfully."
