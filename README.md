@@ -111,6 +111,29 @@ For development:
 cargo run
 ```
 
+## Create a Portable Release
+
+```bash
+./scripts/package-release.sh
+```
+
+The generated archive and checksum are written to `dist/`. The archive
+contains:
+
+```text
+termphonic
+install.sh
+libexec/yt-dlp
+libexec/deno
+assets/termphonic-icon-256.png
+README.md
+THIRD_PARTY_NOTICES.md
+licenses/
+```
+
+Tagged commits matching `v*` are packaged automatically by GitHub Actions and
+uploaded to the corresponding GitHub release.
+
 ## Controls
 
 | Key | Action |
