@@ -57,13 +57,13 @@ sudo pacman -S rust curl ffmpeg unzip
 Install the latest Linux release directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bocd3r/Termphonic/main/scripts/install.sh | bash
+curl -fsSL https://termphonic.github.io/install.sh | bash
 ```
 
 To install a specific release tag:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bocd3r/Termphonic/main/scripts/install.sh | bash -s v0.1.0
+curl -fsSL https://termphonic.github.io/install.sh | bash -s v0.1.0
 ```
 
 The script downloads the release binary, verifies the checksum, and
