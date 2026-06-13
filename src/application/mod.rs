@@ -20,33 +20,13 @@ use std::error::Error;
 use std::time::Duration;
 use tokio::sync::mpsc::unbounded_channel;
 
-pub(crate) async fn run() -> Result<(), Box<dyn Error>> {
+pub async fn run() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
     std::io::stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
 
     let mut audio_player = AudioPlayer::new();
-    let mut state = AppState {
-        search_query: String::new(),
-        search_results: Vec::new(),
-        selected_result: None,
-        search_page: 0,
-        search_has_next_page: false,
-        search_pending_page: None,
-        queue: Vec::new(),
-        selected_queue: None,
-        current_queue_index: None,
-        focus: Focus::SearchInput,
-        is_searching: false,
-        playback_state: PlaybackState::Stopped,
-        playing_song: None,
-        elapsed: Duration::ZERO,
-        playback_level: 0.0,
-        volume: 0.5,
-        loop_mode: LoopMode::Off,
-        theme: Theme::Default,
-        playback_error: None,
-    };
+    let mut state = AppState::default();
 
     let restored_session = load_session();
     if let Some(session) = restored_session.as_ref() {

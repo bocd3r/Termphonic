@@ -4,6 +4,9 @@ use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use unicode_width::UnicodeWidthChar;
 
+#[cfg(feature = "gui")]
+pub mod gui;
+
 pub(crate) fn draw_ui(frame: &mut Frame, state: &AppState) {
     let palette = theme_palette(state.theme);
     let chunks = Layout::default()

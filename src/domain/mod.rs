@@ -164,6 +164,32 @@ pub struct AppState {
     pub playback_error: Option<String>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            search_query: String::new(),
+            search_results: Vec::new(),
+            selected_result: None,
+            search_page: 0,
+            search_has_next_page: false,
+            search_pending_page: None,
+            queue: Vec::new(),
+            selected_queue: None,
+            current_queue_index: None,
+            focus: Focus::SearchInput,
+            is_searching: false,
+            playback_state: PlaybackState::Stopped,
+            playing_song: None,
+            elapsed: Duration::ZERO,
+            playback_level: 0.0,
+            volume: 0.5,
+            loop_mode: LoopMode::Off,
+            theme: Theme::Default,
+            playback_error: None,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SavedSession {
     pub queue: Vec<YtSearchResult>,

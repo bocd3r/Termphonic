@@ -20,6 +20,7 @@
 - Automatic session restore with queue and playback position.
 - Compact duration labels for long videos and live streams.
 - Built-in theme switching with Default, Midnight, High Contrast and Terminal Green.
+- Optional desktop GUI inspired by modern streaming players.
 - Standalone `yt-dlp` integration without Python or pip.
 - Bundled standalone Deno runtime for YouTube JavaScript challenges.
 
@@ -135,6 +136,26 @@ For development:
 ```bash
 cargo run
 ```
+
+### Desktop GUI
+
+Build and run the graphical interface:
+
+```bash
+cargo run --release --features gui --bin termphonic-gui
+```
+
+The GUI shares the same playback queue, session file, audio backend, search
+engine and autoplay behavior as the terminal interface. It currently includes:
+
+- Search with paginated results.
+- Playback queue management.
+- Play, pause, stop and 10-second seeking.
+- Progress and volume controls.
+- Off, shuffle and single-track repeat modes.
+- Automatic session restoration.
+
+The terminal interface remains the default `termphonic` binary.
 
 ## Create a Portable Release
 
